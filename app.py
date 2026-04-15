@@ -13,8 +13,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 from openai import OpenAI
 import json
-from dotenv import load_dotenv
-load_dotenv()
 # ----------------------------- CONFIGURAÇÃO DE PÁGINA E ESTILO -----------------------------
 st.set_page_config(
     page_title="MedStudy Organizer",
@@ -308,7 +306,7 @@ def has_schedule():
 
 # ----------------------------- FUNÇÕES DE IA (OpenAI) -----------------------------
 def get_openai_client():
-    api_key = os.environ.get("OPENAI_API_KEY")
+    api_key = st.secrets["OPENAI_API_KEY"]
     if not api_key:
         st.error("⚠️ Chave da API OpenAI não encontrada. Configure a variável de ambiente OPENAI_API_KEY.")
         st.stop()
