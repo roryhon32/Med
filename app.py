@@ -1,7 +1,7 @@
 # app.py
 """
 📚 MedStudy Organizer – Rotina Inteligente para Estudante de Medicina
-Design limpo, moderno e com ícones elegantes.
+Design renovado com paleta teal/verde, gráficos aprimorados e novas funcionalidades.
 """
 
 import streamlit as st
@@ -10,8 +10,10 @@ import sqlite3
 import os
 from datetime import date, datetime, timedelta
 import plotly.express as px
+import plotly.graph_objects as go
 from openai import OpenAI
 import json
+import calendar
 
 # ----------------------------- CONFIGURAÇÃO DE PÁGINA -----------------------------
 st.set_page_config(
@@ -21,120 +23,187 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ----------------------------- CSS PERSONALIZADO (LIMPO E MODERNO) -----------------------------
-st.markdown("""
+# ----------------------------- PALETA DE CORES -----------------------------
+COLORS = {
+    "primary":    "#006D77",   # verde-escuro
+    "secondary":  "#83C5BE",   # verde-acinzentado
+    "bg_light":   "#EDF6F9",   # bege claro
+    "accent":     "#D9B29C",   # terracota suave
+    "accent2":    "#A66953",   # terracota escuro
+    "white":      "#FFFFFF",
+    "text_dark":  "#1A2E35",
+    "text_mid":   "#3D5A63",
+    "border":     "#C8E0E3",
+}
+
+# Paleta para gráficos
+CHART_COLORS = ["#006D77", "#83C5BE", "#D9B29C", "#A66953", "#4A9E99", "#E8C4B2", "#2C8A8F", "#F0DDD0"]
+
+# ----------------------------- CSS PERSONALIZADO -----------------------------
+st.markdown(f"""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-    
-    html, body, [class*="css"] {
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    html, body, [class*="css"] {{
         font-family: 'Inter', system-ui, sans-serif;
-    }
-    
-    .stApp {
-        background: linear-gradient(135deg, #f5f7fa 0%, #eef2f6 100%);
-    }
-    
-    section[data-testid="stSidebar"] {
-        background-color: #ffffff;
-        border-right: 1px solid rgba(0, 0, 0, 0.05);
-        box-shadow: 2px 0 12px rgba(0, 0, 0, 0.02);
-    }
-    
-    h1, h2, h3 {
-        color: #1e293b;
+    }}
+
+    .stApp {{
+        background-color: {COLORS['bg_light']};
+    }}
+
+    section[data-testid="stSidebar"] {{
+        background: linear-gradient(160deg, {COLORS['primary']} 0%, #004E56 100%);
+        border-right: none;
+    }}
+    section[data-testid="stSidebar"] * {{
+        color: {COLORS['white']} !important;
+    }}
+    section[data-testid="stSidebar"] .stRadio label {{
+        color: rgba(255,255,255,0.85) !important;
+    }}
+    section[data-testid="stSidebar"] .stProgress > div {{
+        background-color: rgba(255,255,255,0.2) !important;
+        border-radius: 20px !important;
+    }}
+    section[data-testid="stSidebar"] .stProgress > div > div {{
+        background: linear-gradient(90deg, {COLORS['secondary']}, #A8DAD6) !important;
+        border-radius: 20px !important;
+    }}
+    section[data-testid="stSidebar"] .stMetricValue {{
+        color: {COLORS['white']} !important;
+    }}
+
+    h1, h2, h3 {{
+        color: {COLORS['text_dark']};
         font-weight: 600;
-        letter-spacing: -0.01em;
-    }
-    
-    div[data-testid="stMetric"] {
-        background: white;
-        border-radius: 20px;
-        padding: 20px 16px;
-        box-shadow: 0 8px 20px -6px rgba(0, 0, 0, 0.05);
-        border: 1px solid rgba(203, 213, 225, 0.3);
-        transition: transform 0.1s ease;
-    }
-    div[data-testid="stMetric"]:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 12px 24px -8px rgba(0, 0, 0, 0.08);
-    }
-    
-    .stButton > button {
+        letter-spacing: -0.02em;
+    }}
+
+    div[data-testid="stMetric"] {{
+        background: {COLORS['white']};
+        border-radius: 18px;
+        padding: 20px 18px;
+        box-shadow: 0 4px 16px rgba(0,109,119,0.08);
+        border: 1px solid {COLORS['border']};
+        transition: all 0.2s ease;
+    }}
+    div[data-testid="stMetric"]:hover {{
+        transform: translateY(-3px);
+        box-shadow: 0 8px 24px rgba(0,109,119,0.14);
+    }}
+    div[data-testid="stMetricValue"] {{
+        color: {COLORS['primary']} !important;
+        font-weight: 700 !important;
+    }}
+
+    .stButton > button {{
         border-radius: 30px;
         padding: 0.5rem 1.8rem;
         font-weight: 500;
         border: none;
-        background: linear-gradient(145deg, #3b82f6, #2563eb);
+        background: linear-gradient(135deg, {COLORS['primary']}, #004E56);
         color: white;
-        box-shadow: 0 4px 8px rgba(59, 130, 246, 0.2);
+        box-shadow: 0 4px 12px rgba(0,109,119,0.25);
         transition: all 0.2s;
-        border: 1px solid rgba(255,255,255,0.1);
-    }
-    .stButton > button:hover {
-        background: linear-gradient(145deg, #2563eb, #1d4ed8);
+    }}
+    .stButton > button:hover {{
+        background: linear-gradient(135deg, #005A62, {COLORS['primary']});
         transform: translateY(-2px);
-        box-shadow: 0 12px 20px -8px rgba(59, 130, 246, 0.4);
-    }
-    .stButton > button:active {
-        transform: translateY(0);
-    }
-    
+        box-shadow: 0 8px 20px rgba(0,109,119,0.35);
+    }}
+    .stButton > button[kind="primary"] {{
+        background: linear-gradient(135deg, {COLORS['accent2']}, {COLORS['accent']});
+        box-shadow: 0 4px 12px rgba(166,105,83,0.3);
+    }}
+    .stButton > button[kind="primary"]:hover {{
+        background: linear-gradient(135deg, #8A5440, {COLORS['accent2']});
+        box-shadow: 0 8px 20px rgba(166,105,83,0.4);
+    }}
+
     .stSelectbox div[data-baseweb="select"] > div,
     .stTextInput input,
     .stNumberInput input,
-    .stTextArea textarea {
-        border-radius: 14px !important;
-        border: 1px solid #cbd5e1 !important;
-        background-color: white !important;
-        padding: 0.6rem 1rem !important;
-        transition: border 0.2s;
-    }
+    .stTextArea textarea {{
+        border-radius: 12px !important;
+        border: 1.5px solid {COLORS['border']} !important;
+        background-color: {COLORS['white']} !important;
+        color: {COLORS['text_dark']} !important;
+    }}
     .stSelectbox div[data-baseweb="select"] > div:focus-within,
     .stTextInput input:focus,
     .stNumberInput input:focus,
-    .stTextArea textarea:focus {
-        border-color: #3b82f6 !important;
-        box-shadow: 0 0 0 3px rgba(59,130,246,0.1) !important;
-    }
-    
-    .stProgress > div > div {
-        background: linear-gradient(90deg, #3b82f6, #60a5fa) !important;
-        border-radius: 20px !important;
-        height: 8px !important;
-    }
-    .stProgress > div {
-        background-color: #e2e8f0 !important;
-        border-radius: 20px !important;
-    }
-    
-    .stDataFrame {
-        border-radius: 16px;
-        overflow: hidden;
-        border: 1px solid #e2e8f0;
-    }
-    
-    .stTabs [data-baseweb="tab-list"] {
+    .stTextArea textarea:focus {{
+        border-color: {COLORS['primary']} !important;
+        box-shadow: 0 0 0 3px rgba(0,109,119,0.12) !important;
+    }}
+
+    .stTabs [data-baseweb="tab-list"] {{
         gap: 8px;
         background: transparent;
-    }
-    .stTabs [data-baseweb="tab"] {
+    }}
+    .stTabs [data-baseweb="tab"] {{
         border-radius: 30px;
-        padding: 8px 20px;
-        background: white;
-        border: 1px solid #e2e8f0;
-        color: #475569;
+        padding: 8px 22px;
+        background: {COLORS['white']};
+        border: 1.5px solid {COLORS['border']};
+        color: {COLORS['text_mid']};
         font-weight: 500;
-    }
-    .stTabs [aria-selected="true"] {
-        background: #3b82f6 !important;
+    }}
+    .stTabs [aria-selected="true"] {{
+        background: {COLORS['primary']} !important;
         color: white !important;
-        border-color: #3b82f6 !important;
-    }
-    
-    .stAlert {
-        border-radius: 16px;
-        border-left-width: 6px;
-    }
+        border-color: {COLORS['primary']} !important;
+    }}
+
+    .stAlert {{
+        border-radius: 14px;
+        border-left-width: 5px;
+    }}
+
+    .stDataFrame {{
+        border-radius: 14px;
+        overflow: hidden;
+        border: 1px solid {COLORS['border']};
+    }}
+
+    /* Cards customizados */
+    .med-card {{
+        background: {COLORS['white']};
+        border-radius: 18px;
+        padding: 20px;
+        box-shadow: 0 4px 16px rgba(0,109,119,0.07);
+        border: 1px solid {COLORS['border']};
+        margin-bottom: 12px;
+    }}
+
+    .med-badge {{
+        display: inline-block;
+        padding: 3px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-right: 6px;
+    }}
+    .badge-plantao {{ background: #FFE0D6; color: #C0392B; }}
+    .badge-faculdade {{ background: #D6EEF0; color: #006D77; }}
+    .badge-livre {{ background: #E8F5E9; color: #2E7D32; }}
+
+    .streak-fire {{
+        font-size: 2.5rem;
+        text-align: center;
+        display: block;
+    }}
+
+    /* Sidebar nav */
+    section[data-testid="stSidebar"] .stRadio div[role="radiogroup"] label {{
+        padding: 8px 14px;
+        border-radius: 10px;
+        transition: background 0.15s;
+    }}
+    section[data-testid="stSidebar"] .stRadio div[role="radiogroup"] label:hover {{
+        background: rgba(255,255,255,0.1);
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -186,10 +255,28 @@ def init_db():
             UNIQUE(day_of_week, time_slot)
         )
     ''')
+    # Nova tabela: metas de estudo
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS study_goals (
+            subject TEXT PRIMARY KEY,
+            weekly_hours REAL,
+            monthly_hours REAL
+        )
+    ''')
+    # Nova tabela: notas rápidas
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS quick_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            created_at DATETIME,
+            subject TEXT,
+            content TEXT,
+            note_type TEXT
+        )
+    ''')
     default_subjects = [
-        ('Anatomia', '#ef4444'), ('Fisiologia', '#3b82f6'), ('Farmacologia', '#10b981'),
-        ('Patologia', '#f59e0b'), ('Semiologia', '#8b5cf6'), ('Clínica Médica', '#ec4899'),
-        ('Pediatria', '#14b8a6'), ('Ginecologia', '#d946ef'), ('Cirurgia', '#f97316')
+        ('Anatomia', '#006D77'), ('Fisiologia', '#83C5BE'), ('Farmacologia', '#D9B29C'),
+        ('Patologia', '#A66953'), ('Semiologia', '#4A9E99'), ('Clínica Médica', '#2C8A8F'),
+        ('Pediatria', '#5BA69F'), ('Ginecologia', '#C4806A'), ('Cirurgia', '#7DC5BF')
     ]
     c.executemany("INSERT OR IGNORE INTO subjects (name, color) VALUES (?, ?)", default_subjects)
     c.execute("INSERT OR IGNORE INTO user_stats (key, value) VALUES ('xp', '0')")
@@ -308,7 +395,7 @@ def get_subjects():
     conn.close()
     return df
 
-def add_subject(name, color="#3b82f6"):
+def add_subject(name, color="#006D77"):
     conn = get_db_connection()
     c = conn.cursor()
     try:
@@ -341,15 +428,49 @@ def has_schedule():
     df = load_weekly_schedule()
     return not df.empty
 
-# ----------------------------- INTEGRAÇÃO COM OPENAI -----------------------------
+# Notas rápidas
+def add_quick_note(subject, content, note_type):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("INSERT INTO quick_notes (created_at, subject, content, note_type) VALUES (?, ?, ?, ?)",
+              (datetime.now().isoformat(), subject, content, note_type))
+    conn.commit()
+    conn.close()
+
+def get_quick_notes(limit=20):
+    conn = get_db_connection()
+    df = pd.read_sql("SELECT * FROM quick_notes ORDER BY created_at DESC LIMIT ?", conn, params=[limit])
+    conn.close()
+    return df
+
+def delete_quick_note(note_id):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("DELETE FROM quick_notes WHERE id=?", (note_id,))
+    conn.commit()
+    conn.close()
+
+# Metas
+def save_goal(subject, weekly_hours, monthly_hours):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("INSERT OR REPLACE INTO study_goals (subject, weekly_hours, monthly_hours) VALUES (?, ?, ?)",
+              (subject, weekly_hours, monthly_hours))
+    conn.commit()
+    conn.close()
+
+def get_goals():
+    conn = get_db_connection()
+    df = pd.read_sql("SELECT * FROM study_goals", conn)
+    conn.close()
+    return df
+
+# ----------------------------- OPENAI -----------------------------
 def get_openai_client():
-    # Primeiro tenta st.secrets (padrão no Streamlit Cloud)
     try:
         api_key = st.secrets["OPENAI_API_KEY"]
     except (KeyError, FileNotFoundError):
-        # Fallback para variável de ambiente (desenvolvimento local)
         api_key = os.environ.get("OPENAI_API_KEY")
-    
     if not api_key:
         st.error("⚠️ Chave da API OpenAI não encontrada. Configure em st.secrets ou variável de ambiente OPENAI_API_KEY.")
         st.stop()
@@ -399,21 +520,14 @@ Informações:
 - Histórico recente: {historical_context}
 - Solicitações adicionais da estudante: "{user_input if user_input else 'Nenhuma'}"
 
-Gere um cronograma em formato de tabela, com os seguintes campos para cada dia da semana (0=Segunda a 6=Domingo):
-- Horário (ex: "08:00-10:00")
-- Matéria/Assunto
-- Tipo de atividade (Teoria, Revisão, Questões, Resumo, etc.)
-- Observações (opcional)
-
-Seja realista com os horários, considerando que em dias de plantão o estudo deve ser mais leve e curto, em dias de faculdade moderado, e em dias livres mais intenso.
-Retorne APENAS um JSON válido com a seguinte estrutura:
+Gere um cronograma considerando que plantão = estudo leve, faculdade = moderado, livre = intenso.
+Retorne APENAS um JSON válido:
 {{
   "schedule": [
     {{"day": 0, "time": "08:00-10:00", "subject": "Anatomia", "activity": "Teoria", "notes": ""}},
     ...
   ]
 }}
-Certifique-se de que o JSON seja válido e contenha entradas para todos os dias com atividades relevantes.
 """
     try:
         response = client.chat.completions.create(
@@ -434,15 +548,48 @@ Certifique-se de que o JSON seja válido e contenha entradas para todos os dias 
         st.error(f"Erro ao gerar cronograma: {e}")
         return None
 
+def generate_ai_analysis(historical_context, goals_df, df_logs):
+    """Nova função: análise geral de desempenho pela IA"""
+    client = get_openai_client()
+    goals_str = goals_df.to_string(index=False) if not goals_df.empty else "Sem metas definidas"
+    prompt = f"""
+Você é um mentor de medicina. Analise o desempenho de estudo da estudante e dê um relatório motivador.
+
+{historical_context}
+
+Metas definidas:
+{goals_str}
+
+Forneça:
+1. Avaliação geral do desempenho (1-2 frases)
+2. Pontos fortes observados
+3. Áreas de melhoria
+4. Sugestão para a próxima semana
+5. Mensagem motivacional personalizada
+
+Responda em português, de forma acolhedora e construtiva.
+"""
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[{"role": "system", "content": "Você é um mentor experiente de medicina."},
+                      {"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=600
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"❌ Erro: {str(e)}"
+
 def build_historical_context():
     today = date.today()
     week_ago = today - timedelta(days=7)
     df = get_study_logs(week_ago, today)
     if df.empty:
         return "Nenhum estudo registrado na última semana."
-    total_hours = df['hours'].sum()
+    total_horas = df['hours'].sum()
     days_studied = df['log_date'].nunique()
-    avg_hours = total_hours / 7
+    avg_hours = total_horas / 7
     if days_studied < 3:
         consistency = "baixa consistência"
     elif days_studied < 5:
@@ -457,7 +604,7 @@ Histórico últimos 7 dias:
 - Horas totais: {total_horas:.1f}h
 - Dias estudados: {days_studied}/7
 - Média diária: {avg_hours:.1f}h
-- {consistency}.
+- {consistency}
 - Matéria mais estudada: {most}
 - Matéria menos estudada: {least}
 """
@@ -481,163 +628,270 @@ def get_plan_for_today():
         study_type_rec = "questoes"
     return day_type, suggestion, hours_rec, study_type_rec
 
+# ----------------------------- HELPERS DE GRÁFICO -----------------------------
+PLOTLY_LAYOUT = dict(
+    paper_bgcolor='rgba(0,0,0,0)',
+    plot_bgcolor='rgba(237,246,249,0.5)',
+    font=dict(family='Inter, sans-serif', color=COLORS['text_dark']),
+    margin=dict(l=10, r=10, t=36, b=10),
+)
+
+def styled_bar(df, x, y, title, color=None, text=None):
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=df[x], y=df[y],
+        marker_color=color or COLORS['primary'],
+        marker_line_width=0,
+        text=df[text] if text else None,
+        textposition='outside',
+        hovertemplate='<b>%{x}</b><br>%{y:.1f}h<extra></extra>',
+    ))
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=14, color=COLORS['text_dark'])),
+        bargap=0.35,
+        yaxis=dict(showgrid=True, gridcolor='rgba(0,0,0,0.04)', zeroline=False),
+        xaxis=dict(showgrid=False),
+        **PLOTLY_LAYOUT
+    )
+    return fig
+
+def styled_pie(names, values, title):
+    fig = go.Figure(go.Pie(
+        labels=names, values=values,
+        hole=0.45,
+        marker_colors=CHART_COLORS,
+        textinfo='label+percent',
+        hovertemplate='<b>%{label}</b><br>%{value:.1f}h (%{percent})<extra></extra>',
+    ))
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=14)),
+        showlegend=False,
+        **PLOTLY_LAYOUT
+    )
+    return fig
+
+def styled_line(df, x, y, title):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df[x], y=df[y],
+        mode='lines+markers',
+        line=dict(color=COLORS['primary'], width=2.5, shape='spline'),
+        marker=dict(size=7, color=COLORS['accent2'], line=dict(color='white', width=1.5)),
+        fill='tozeroy',
+        fillcolor='rgba(0,109,119,0.07)',
+        hovertemplate='<b>Semana %{x}</b><br>%{y:.1f}h<extra></extra>',
+    ))
+    fig.update_layout(
+        title=dict(text=title, font=dict(size=14)),
+        yaxis=dict(showgrid=True, gridcolor='rgba(0,0,0,0.04)', zeroline=False),
+        xaxis=dict(showgrid=False),
+        **PLOTLY_LAYOUT
+    )
+    return fig
+
+def styled_heatmap(df_logs):
+    """Heatmap de horas por dia (calendário)"""
+    if df_logs.empty:
+        return None
+    df_logs = df_logs.copy()
+    df_logs['log_date'] = pd.to_datetime(df_logs['log_date'])
+    daily = df_logs.groupby('log_date')['hours'].sum().reset_index()
+    daily['weekday'] = daily['log_date'].dt.weekday
+    daily['week'] = daily['log_date'].dt.isocalendar().week.astype(int)
+    pivot = daily.pivot_table(index='weekday', columns='week', values='hours', fill_value=0)
+    dias_labels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+    fig = go.Figure(go.Heatmap(
+        z=pivot.values,
+        x=[f"S{w}" for w in pivot.columns],
+        y=[dias_labels[i] for i in pivot.index],
+        colorscale=[[0, '#EDF6F9'], [0.3, '#83C5BE'], [1, '#006D77']],
+        showscale=True,
+        hovertemplate='<b>%{y}</b> semana %{x}<br>%{z:.1f}h<extra></extra>',
+    ))
+    fig.update_layout(
+        title=dict(text="Heatmap de Estudos", font=dict(size=14)),
+        **PLOTLY_LAYOUT
+    )
+    return fig
+
 # ----------------------------- INTERFACE PRINCIPAL -----------------------------
 def main():
     with st.sidebar:
-        st.markdown("""
-        <div style="display: flex; align-items: center; margin-bottom: 20px;">
-            <span style="font-size: 2.5rem; margin-right: 10px;">🩺</span>
-            <span style="font-size: 1.8rem; font-weight: 600; color: #1e293b;">MedStudy</span>
+        st.markdown(f"""
+        <div style="padding: 10px 0 16px 0; display:flex; align-items:center; gap:10px;">
+            <span style="font-size:2.2rem;">🩺</span>
+            <div>
+                <div style="font-size:1.3rem; font-weight:700; color:white; letter-spacing:-0.02em;">MedStudy</div>
+                <div style="font-size:0.75rem; color:rgba(255,255,255,0.6);">Organizador Inteligente</div>
+            </div>
         </div>
         """, unsafe_allow_html=True)
-        st.markdown("---")
-        
+
         menu = st.radio(
             "Navegação",
-            ["Dashboard", "Rotina Semanal", "Cronograma Semanal", "Registrar Estudo", "Sugestão IA", "Histórico", "Assuntos"],
-            label_visibility="collapsed",
-            captions=[
-                "Visão geral e progresso",
-                "Definir tipo de cada dia",
-                "Plano de estudos semanal",
-                "Adicionar horas estudadas",
-                "Plano personalizado do dia",
-                "Consultar registros passados",
-                "Gerenciar matérias"
-            ]
+            ["🏠 Dashboard", "📅 Rotina Semanal", "📆 Cronograma", "📝 Registrar Estudo",
+             "🧠 Sugestão IA", "📊 Histórico & Análises", "🎯 Metas", "📌 Notas Rápidas", "⚙️ Assuntos"],
+            label_visibility="collapsed"
         )
-        
-        menu_map = {
-            "Dashboard": "🏠 Dashboard",
-            "Rotina Semanal": "📅 Rotina Semanal",
-            "Cronograma Semanal": "📆 Cronograma Semanal",
-            "Registrar Estudo": "📝 Registrar Estudo",
-            "Sugestão IA": "🧠 Sugestão IA",
-            "Histórico": "📊 Histórico",
-            "Assuntos": "⚙️ Assuntos"
-        }
-        selected = menu_map[menu]
-        
+
         st.markdown("---")
+
         xp = int(get_user_stat('xp', 0))
         level = int(get_user_stat('level', 1))
         streak = int(get_user_stat('streak', 0))
         xp_next = level * 100
         progress = min(xp / xp_next, 1.0) if xp_next > 0 else 0
-        
-        st.markdown("### Progresso")
+
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("Nível", level)
+            st.metric("Nível", f"⭐ {level}")
         with col2:
-            st.metric("Streak", f"{streak} dias")
+            st.metric("Streak", f"🔥 {streak}d")
         st.progress(progress, text=f"{xp}/{xp_next} XP")
-        
+
         today_str = date.today().isoformat()
         conn = get_db_connection()
         c = conn.cursor()
         c.execute("SELECT SUM(hours) FROM study_logs WHERE log_date=?", (today_str,))
         studied_today = c.fetchone()[0] or 0
         conn.close()
+
         if studied_today > 0:
-            st.success(f"Hoje: {studied_today:.1f}h estudadas")
+            st.success(f"✅ Hoje: {studied_today:.1f}h estudadas")
         else:
-            st.warning("Nenhum estudo hoje")
+            st.warning("📚 Nenhum estudo hoje")
+
         st.markdown("---")
-        st.caption("🔒 Seus dados são privados e armazenados localmente.")
-    
-    # Conteúdo principal baseado no menu
+        st.caption("🔒 Dados armazenados localmente.")
+
+    selected = menu
+
+    # ======================== DASHBOARD ========================
     if selected == "🏠 Dashboard":
-        st.header("Dashboard")
-        col1, col2 = st.columns([1.2, 0.8], gap="large")
-        with col1:
-            st.subheader("Plano para hoje")
-            day_type, suggestion, hours_rec, study_type_rec = get_plan_for_today()
-            dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
-            hoje = dias[date.today().weekday()]
-            st.metric("Hoje", f"{hoje} ({day_type.capitalize()})")
-            st.info(suggestion)
-            st.write(f"⏱️ Horas recomendadas: **{hours_rec} horas**")
-            st.write(f"📚 Tipo sugerido: **{study_type_rec.capitalize()}**")
-            if st.button("Registrar estudo rápido", use_container_width=True):
-                st.session_state['quick_hours'] = hours_rec
-                st.session_state['quick_type'] = study_type_rec
-                st.rerun()
-        with col2:
-            st.subheader("Últimos 7 dias")
-            start = date.today() - timedelta(days=6)
-            df = get_study_logs(start, date.today())
-            if not df.empty:
-                df['log_date'] = pd.to_datetime(df['log_date'])
-                daily = df.groupby('log_date')['hours'].sum().reset_index()
-                fig = px.bar(daily, x='log_date', y='hours', color_discrete_sequence=['#3b82f6'])
-                fig.update_layout(margin=dict(l=0, r=0, t=0, b=0), height=250)
+        st.markdown(f"# 🏠 Dashboard")
+        day_type, suggestion, hours_rec, study_type_rec = get_plan_for_today()
+        dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
+        hoje = dias[date.today().weekday()]
+
+        badge_class = {"plantao": "badge-plantao", "faculdade": "badge-faculdade", "livre": "badge-livre"}.get(day_type, "badge-faculdade")
+        st.markdown(f"""
+        <div class="med-card">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <span style="font-size:1.1rem; font-weight:600; color:{COLORS['text_dark']};">{hoje}</span>
+                    <span class="med-badge {badge_class}">{day_type.upper()}</span>
+                </div>
+                <div style="color:{COLORS['text_mid']}; font-size:0.9rem;">{date.today().strftime('%d/%m/%Y')}</div>
+            </div>
+            <div style="margin-top:10px; color:{COLORS['text_mid']};">{suggestion}</div>
+            <div style="margin-top:8px;">
+                <span style="color:{COLORS['primary']}; font-weight:600;">⏱ {hours_rec}h recomendadas</span>
+                &nbsp;·&nbsp;
+                <span style="color:{COLORS['accent2']}; font-weight:500;">📚 {study_type_rec.capitalize()}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Métricas principais
+        start = date.today() - timedelta(days=6)
+        df_week = get_study_logs(start, date.today())
+        df_all = get_study_logs()
+
+        total_h_week = df_week['hours'].sum() if not df_week.empty else 0
+        total_h_all = df_all['hours'].sum() if not df_all.empty else 0
+        total_xp = df_all['xp_earned'].sum() if not df_all.empty else 0
+        dias_estudados = df_week['log_date'].nunique() if not df_week.empty else 0
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Horas esta semana", f"{total_h_week:.1f}h")
+        col2.metric("Dias estudados (7d)", f"{dias_estudados}/7")
+        col3.metric("Total acumulado", f"{total_h_all:.1f}h")
+        col4.metric("XP total", f"{int(total_xp)}")
+
+        st.markdown("---")
+
+        col_a, col_b = st.columns([1.3, 0.7])
+        with col_a:
+            if not df_week.empty:
+                df_week['log_date'] = pd.to_datetime(df_week['log_date'])
+                daily = df_week.groupby('log_date')['hours'].sum().reset_index()
+                daily['log_date'] = daily['log_date'].dt.strftime('%a %d/%m')
+                fig = styled_bar(daily, 'log_date', 'hours', "Horas por dia — últimos 7 dias", COLORS['primary'])
+                fig.update_layout(height=260)
                 st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("Sem dados na última semana.")
-        
-        st.markdown("---")
-        col3, col4 = st.columns(2)
-        with col3:
-            st.subheader("Distribuição por matéria")
-            df_all = get_study_logs()
+
+        with col_b:
             if not df_all.empty:
-                subject_hours = df_all.groupby('subject')['hours'].sum().reset_index().sort_values('hours', ascending=False)
-                fig = px.pie(subject_hours, values='hours', names='subject', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-                fig.update_layout(height=300)
+                subject_hours = df_all.groupby('subject')['hours'].sum().reset_index()
+                fig = styled_pie(subject_hours['subject'], subject_hours['hours'], "Por matéria")
+                fig.update_layout(height=260)
                 st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info("Registre estudos para ver estatísticas.")
-        with col4:
-            st.subheader("Mensagem do dia")
-            if streak >= 5:
-                st.success("🌟 Você está voando! Continue com essa constância incrível.")
-            elif streak >= 2:
-                st.info("💪 Ótimo trabalho! Cada dia conta na sua jornada.")
-            else:
-                st.warning("🌱 Comece hoje! Pequenos passos levam a grandes conquistas.")
-    
+
+        # Heatmap
+        if not df_all.empty:
+            hm = styled_heatmap(df_all)
+            if hm:
+                hm.update_layout(height=220)
+                st.plotly_chart(hm, use_container_width=True)
+
+        # Mensagem motivacional
+        if streak >= 7:
+            st.success("🌟 Sequência incrível de 7+ dias! Você é imparável.")
+        elif streak >= 3:
+            st.info("💪 Boa sequência! Continue assim, cada dia conta.")
+        elif streak >= 1:
+            st.info("🌱 Ótimo começo! Mantenha o ritmo amanhã.")
+        else:
+            st.warning("🔥 Que tal registrar seu estudo de hoje?")
+
+        if st.button("⚡ Registrar estudo rápido", use_container_width=True):
+            st.session_state['quick_hours'] = hours_rec
+            st.session_state['quick_type'] = study_type_rec
+            st.session_state['_nav'] = "📝 Registrar Estudo"
+            st.rerun()
+
+    # ======================== ROTINA SEMANAL ========================
     elif selected == "📅 Rotina Semanal":
-        st.header("Configurar Rotina Semanal")
+        st.markdown("# 📅 Rotina Semanal")
         st.markdown("Defina o tipo de cada dia para o planejamento automático.")
         routine = load_weekly_routine()
         dias = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"]
-        tipos = {"plantao": "Plantão", "faculdade": "Faculdade", "livre": "Livre"}
+        tipos = {"plantao": "🏥 Plantão", "faculdade": "🎓 Faculdade", "livre": "📖 Livre"}
         novo_routine = {}
         cols = st.columns(7)
         for i, dia in enumerate(dias):
             with cols[i]:
-                st.markdown(f"**{dia}**")
+                st.markdown(f"<div style='text-align:center; font-weight:600; color:{COLORS['primary']};'>{dia[:3]}</div>", unsafe_allow_html=True)
                 idx = routine.get(i, 'faculdade')
                 opcoes = list(tipos.values())
                 chaves = list(tipos.keys())
                 default_idx = chaves.index(idx) if idx in chaves else 1
                 escolha_label = st.selectbox("", opcoes, index=default_idx, key=f"dia_{i}", label_visibility="collapsed")
                 novo_routine[i] = chaves[opcoes.index(escolha_label)]
-        if st.button("Salvar rotina", type="primary"):
+        if st.button("💾 Salvar rotina", type="primary"):
             save_weekly_routine(novo_routine)
             st.success("Rotina semanal atualizada!")
             st.balloons()
-    
-    elif selected == "📆 Cronograma Semanal":
-        st.header("Cronograma de Estudos Semanal")
-        if not has_schedule():
-            st.warning("Você ainda não tem um cronograma salvo. Use a opção abaixo para criar um.")
-        else:
-            st.success("Cronograma salvo encontrado.")
-        
-        tab1, tab2 = st.tabs(["Visualizar/Editar", "Gerar com IA"])
-        
+
+    # ======================== CRONOGRAMA ========================
+    elif selected == "📆 Cronograma":
+        st.markdown("# 📆 Cronograma Semanal")
+        tab1, tab2 = st.tabs(["📋 Visualizar / Editar", "🤖 Gerar com IA"])
+
         with tab1:
             if has_schedule():
                 df_schedule = load_weekly_schedule()
                 dias_map = {0: "Segunda", 1: "Terça", 2: "Quarta", 3: "Quinta", 4: "Sexta", 5: "Sábado", 6: "Domingo"}
                 df_schedule['Dia'] = df_schedule['day_of_week'].map(dias_map)
-                df_display = df_schedule[['Dia', 'time_slot', 'subject', 'activity_type', 'notes']]
+                df_display = df_schedule[['Dia', 'time_slot', 'subject', 'activity_type', 'notes']].copy()
                 df_display.columns = ['Dia', 'Horário', 'Matéria', 'Atividade', 'Observações']
                 st.dataframe(df_display, use_container_width=True, hide_index=True)
-                
-                with st.expander("Editar cronograma manualmente"):
+
+                with st.expander("✏️ Editar cronograma manualmente"):
                     col1, col2 = st.columns(2)
                     with col1:
                         edit_day = st.selectbox("Dia", list(dias_map.values()), key="edit_day")
@@ -646,35 +900,34 @@ def main():
                     with col2:
                         edit_activity = st.selectbox("Tipo de atividade", ["Teoria", "Revisão", "Questões", "Resumo", "Flashcards"], key="edit_activity")
                         edit_notes = st.text_input("Observações", key="edit_notes")
-                    if st.button("Adicionar bloco"):
+                    if st.button("➕ Adicionar bloco"):
                         day_num = list(dias_map.keys())[list(dias_map.values()).index(edit_day)]
                         new_row = pd.DataFrame([[day_num, edit_time, edit_subject, edit_activity, edit_notes]],
                                                columns=['day_of_week', 'time_slot', 'subject', 'activity_type', 'notes'])
-                        df_updated = pd.concat([df_schedule, new_row], ignore_index=True)
+                        df_updated = pd.concat([df_schedule[['day_of_week','time_slot','subject','activity_type','notes']], new_row], ignore_index=True)
                         save_weekly_schedule(df_updated)
                         st.success("Bloco adicionado!")
                         st.rerun()
-                    
                     st.markdown("---")
-                    delete_index = st.selectbox("Selecione o bloco para remover", df_display.index, format_func=lambda x: f"{df_display.iloc[x]['Dia']} {df_display.iloc[x]['Horário']} - {df_display.iloc[x]['Matéria']}")
-                    if st.button("Remover selecionado"):
-                        df_schedule = df_schedule.drop(delete_index).reset_index(drop=True)
-                        save_weekly_schedule(df_schedule)
+                    delete_index = st.selectbox("Selecione o bloco para remover", df_display.index,
+                        format_func=lambda x: f"{df_display.iloc[x]['Dia']} {df_display.iloc[x]['Horário']} - {df_display.iloc[x]['Matéria']}")
+                    if st.button("🗑️ Remover selecionado"):
+                        df_schedule_raw = df_schedule[['day_of_week','time_slot','subject','activity_type','notes']].drop(delete_index).reset_index(drop=True)
+                        save_weekly_schedule(df_schedule_raw)
                         st.success("Bloco removido!")
                         st.rerun()
             else:
-                st.info("Nenhum cronograma salvo. Vá para a aba 'Gerar com IA' ou crie manualmente.")
-                if st.button("Criar cronograma vazio para editar"):
-                    empty_df = pd.DataFrame(columns=['day_of_week', 'time_slot', 'subject', 'activity_type', 'notes'])
-                    save_weekly_schedule(empty_df)
+                st.info("Nenhum cronograma salvo. Use a aba 'Gerar com IA' ou crie manualmente.")
+                if st.button("Criar cronograma vazio"):
+                    save_weekly_schedule(pd.DataFrame(columns=['day_of_week', 'time_slot', 'subject', 'activity_type', 'notes']))
                     st.rerun()
-        
+
         with tab2:
-            st.subheader("Gerar cronograma sugerido pela IA")
-            user_suggestion = st.text_area("Alguma preferência ou sugestão extra? (opcional)", 
-                                           placeholder="Ex: Quero focar em Farmacologia e Patologia; prefiro estudar à noite...")
-            if st.button("Gerar sugestão de cronograma", type="primary"):
-                with st.spinner("A IA está preparando seu cronograma personalizado..."):
+            st.subheader("Gerar cronograma com IA")
+            user_suggestion = st.text_area("Preferências adicionais (opcional)",
+                                           placeholder="Ex: Foco em Farmacologia e Patologia; prefiro estudar à noite...")
+            if st.button("✨ Gerar cronograma", type="primary"):
+                with st.spinner("A IA está criando seu cronograma personalizado..."):
                     routine = load_weekly_routine()
                     subjects_df = get_subjects()
                     subjects_list = subjects_df['name'].tolist()
@@ -684,132 +937,316 @@ def main():
                         df_new = pd.DataFrame(schedule_data)
                         df_new = df_new.rename(columns={"day": "day_of_week", "time": "time_slot", "activity": "activity_type", "notes": "notes"})
                         st.session_state['ai_schedule'] = df_new
-                        st.success("Cronograma gerado! Revise abaixo e salve se desejar.")
+                        st.success("Cronograma gerado! Revise e salve se desejar.")
                     else:
                         st.error("Não foi possível gerar o cronograma. Tente novamente.")
-            
+
             if 'ai_schedule' in st.session_state:
                 st.markdown("### Sugestão da IA")
                 df_ai = st.session_state['ai_schedule']
                 dias_map = {0: "Segunda", 1: "Terça", 2: "Quarta", 3: "Quinta", 4: "Sexta", 5: "Sábado", 6: "Domingo"}
-                df_ai['Dia'] = df_ai['day_of_week'].map(dias_map)
-                st.dataframe(df_ai[['Dia', 'time_slot', 'subject', 'activity_type', 'notes']], use_container_width=True, hide_index=True)
-                
+                df_ai_show = df_ai.copy()
+                df_ai_show['Dia'] = df_ai_show['day_of_week'].map(dias_map)
+                st.dataframe(df_ai_show[['Dia', 'time_slot', 'subject', 'activity_type', 'notes']], use_container_width=True, hide_index=True)
                 col_save, col_discard = st.columns(2)
                 with col_save:
-                    if st.button("Salvar este cronograma", type="primary"):
+                    if st.button("💾 Salvar cronograma", type="primary"):
                         save_weekly_schedule(df_ai)
-                        st.success("Cronograma salvo com sucesso!")
+                        st.success("Cronograma salvo!")
                         del st.session_state['ai_schedule']
                         st.rerun()
                 with col_discard:
-                    if st.button("Descartar"):
+                    if st.button("🗑️ Descartar"):
                         del st.session_state['ai_schedule']
                         st.rerun()
-    
+
+    # ======================== REGISTRAR ESTUDO ========================
     elif selected == "📝 Registrar Estudo":
-        st.header("Registrar Sessão de Estudo")
+        st.markdown("# 📝 Registrar Sessão de Estudo")
         col1, col2 = st.columns(2)
         with col1:
             data_estudo = st.date_input("Data", value=date.today())
             horas = st.number_input("Horas estudadas", min_value=0.0, max_value=24.0, step=0.5,
                                     value=st.session_state.get('quick_hours', 0.0))
             tipo = st.selectbox("Tipo de estudo", ["teoria", "revisao", "questoes"],
-                                index=["teoria", "revisao", "questoes"].index(
-                                    st.session_state.get('quick_type', 'teoria')))
+                                format_func=lambda x: {"teoria": "📖 Teoria", "revisao": "🔄 Revisão", "questoes": "✏️ Questões"}[x],
+                                index=["teoria", "revisao", "questoes"].index(st.session_state.get('quick_type', 'teoria')))
         with col2:
             subjects_df = get_subjects()
             subject_list = subjects_df['name'].tolist() if not subjects_df.empty else ["Anatomia", "Fisiologia"]
             assunto = st.selectbox("Matéria / Assunto", subject_list)
-            novo_assunto = st.text_input("Ou adicione um novo assunto", placeholder="Ex: Neurologia")
-            if novo_assunto and st.button("Adicionar assunto"):
+            novo_assunto = st.text_input("Ou adicione novo assunto", placeholder="Ex: Neurologia")
+            if novo_assunto and st.button("➕ Adicionar assunto"):
                 add_subject(novo_assunto)
-                st.success(f"Assunto '{novo_assunto}' adicionado!")
+                st.success(f"'{novo_assunto}' adicionado!")
                 st.rerun()
             observacoes = st.text_area("Observações", placeholder="Ex: Páginas 100-150, 20 questões...")
-        
-        if st.button("Registrar", type="primary"):
+
+        xp_preview = int(horas * 10) + {'teoria': 2, 'revisao': 3, 'questoes': 5}.get(tipo, 0)
+        st.info(f"💡 Você ganhará **{xp_preview} XP** com essa sessão.")
+
+        if st.button("✅ Registrar sessão", type="primary"):
             if horas > 0:
                 final_subject = novo_assunto if novo_assunto else assunto
                 if novo_assunto:
                     add_subject(novo_assunto)
                 xp_ganho = add_study_log(data_estudo.isoformat(), horas, tipo, final_subject, observacoes)
-                st.success(f"Sessão registrada! Você ganhou **{xp_ganho} XP**.")
+                st.success(f"Sessão registrada! Você ganhou **{xp_ganho} XP** 🎉")
                 st.session_state.pop('quick_hours', None)
                 st.session_state.pop('quick_type', None)
                 st.rerun()
             else:
                 st.warning("Informe pelo menos 0.5 horas.")
-    
+
+    # ======================== SUGESTÃO IA ========================
     elif selected == "🧠 Sugestão IA":
-        st.header("Sugestão Inteligente de Estudo")
-        st.markdown("A IA analisa seu histórico e sugere um plano personalizado para **hoje**.")
-        
+        st.markdown("# 🧠 Sugestão Inteligente de Estudo")
+        st.markdown("A IA analisa seu histórico e monta um plano personalizado para **hoje**.")
+
         col1, col2, col3 = st.columns(3)
         with col1:
-            tipo_dia = st.selectbox("Tipo de dia", ["plantao", "faculdade", "livre"])
+            tipo_dia = st.selectbox("Tipo de dia", ["plantao", "faculdade", "livre"],
+                                    format_func=lambda x: {"plantao":"🏥 Plantão","faculdade":"🎓 Faculdade","livre":"📖 Livre"}[x])
         with col2:
             horas_disp = st.slider("Horas disponíveis", 0.5, 8.0, 2.0, step=0.5)
         with col3:
-            energia = st.selectbox("Nível de energia", ["cansada", "normal", "disposta"])
-        
+            energia = st.selectbox("Nível de energia", ["cansada", "normal", "disposta"],
+                                   format_func=lambda x: {"cansada":"😴 Cansada","normal":"😊 Normal","disposta":"⚡ Disposta"}[x])
+
         subjects_df = get_subjects()
         subject_options = subjects_df['name'].tolist() if not subjects_df.empty else ["Geral"]
         assunto_foco = st.selectbox("Foco em qual matéria? (opcional)", ["(Nenhum)"] + subject_options)
         if assunto_foco == "(Nenhum)":
             assunto_foco = ""
-        
+
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
-            if st.button("Tenho pouco tempo hoje"):
+            if st.button("⏱️ Tenho pouco tempo"):
                 horas_disp = 1.0
                 energia = "cansada"
-                st.info("Plano rápido: 1 hora, energia cansada.")
+                st.info("Plano rápido: 1 hora, energia baixa.")
         with col_btn2:
-            gerar = st.button("Gerar sugestão com IA", type="primary")
-        
+            gerar = st.button("✨ Gerar plano com IA", type="primary")
+
         if gerar:
-            with st.spinner("Consultando a IA..."):
+            with st.spinner("A IA está criando seu plano..."):
                 contexto = build_historical_context()
                 sugestao = generate_ai_suggestion(tipo_dia, horas_disp, energia, assunto_foco, contexto)
                 st.markdown("### Seu plano de estudo personalizado:")
-                st.success(sugestao)
-    
-    elif selected == "📊 Histórico":
-        st.header("Histórico de Estudos")
-        df = get_study_logs()
+                st.markdown(f"""
+                <div class="med-card">
+                    {sugestao.replace(chr(10), '<br>')}
+                </div>
+                """, unsafe_allow_html=True)
+
+        # Análise completa de desempenho
+        st.markdown("---")
+        st.subheader("📈 Análise de Desempenho pela IA")
+        if st.button("🔍 Analisar meu desempenho geral"):
+            with st.spinner("Analisando seus dados..."):
+                contexto = build_historical_context()
+                goals_df = get_goals()
+                df_logs = get_study_logs()
+                analise = generate_ai_analysis(contexto, goals_df, df_logs)
+                st.markdown(f"""
+                <div class="med-card">
+                    {analise.replace(chr(10), '<br>')}
+                </div>
+                """, unsafe_allow_html=True)
+
+    # ======================== HISTÓRICO & ANÁLISES ========================
+    elif selected == "📊 Histórico & Análises":
+        st.markdown("# 📊 Histórico & Análises")
+
+        # Filtros
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            start_filter = st.date_input("De", value=date.today() - timedelta(days=30))
+        with col_f2:
+            end_filter = st.date_input("Até", value=date.today())
+
+        df = get_study_logs(start_filter, end_filter)
+
         if not df.empty:
             df['log_date'] = pd.to_datetime(df['log_date']).dt.date
             df = df.sort_values('log_date', ascending=False)
-            st.dataframe(df, use_container_width=True, hide_index=True)
-            
-            st.subheader("Análises")
-            col1, col2 = st.columns(2)
-            with col1:
-                fig = px.pie(df, names='study_type', title='Distribuição por tipo', color_discrete_sequence=px.colors.qualitative.Set3)
+
+            # Métricas do período
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Horas no período", f"{df['hours'].sum():.1f}h")
+            col2.metric("Sessões registradas", len(df))
+            col3.metric("XP no período", int(df['xp_earned'].sum()))
+
+            # Tabela
+            with st.expander("📋 Ver tabela completa"):
+                st.dataframe(df, use_container_width=True, hide_index=True)
+
+            st.markdown("---")
+
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                # Barras por tipo
+                type_hours = df.groupby('study_type')['hours'].sum().reset_index()
+                type_map = {'teoria': 'Teoria', 'revisao': 'Revisão', 'questoes': 'Questões'}
+                type_hours['study_type'] = type_hours['study_type'].map(type_map).fillna(type_hours['study_type'])
+                fig = styled_bar(type_hours, 'study_type', 'hours', "Horas por tipo de estudo",
+                                 color=[COLORS['primary'], COLORS['secondary'], COLORS['accent']])
+                fig.update_layout(height=280)
                 st.plotly_chart(fig, use_container_width=True)
-            with col2:
-                df['week'] = pd.to_datetime(df['log_date']).dt.isocalendar().week
-                weekly_hours = df.groupby('week')['hours'].sum().reset_index()
-                fig = px.line(weekly_hours, x='week', y='hours', markers=True, title='Horas por semana', color_discrete_sequence=['#3b82f6'])
+
+            with col_g2:
+                # Pizza por matéria
+                subj_hours = df.groupby('subject')['hours'].sum().reset_index().sort_values('hours', ascending=False)
+                fig = styled_pie(subj_hours['subject'], subj_hours['hours'], "Distribuição por matéria")
+                fig.update_layout(height=280)
                 st.plotly_chart(fig, use_container_width=True)
-            
-            total_horas = df['hours'].sum()
-            total_xp = df['xp_earned'].sum()
-            col_m1, col_m2 = st.columns(2)
-            col_m1.metric("Total de horas", f"{total_horas:.1f}h")
-            col_m2.metric("Total de XP", total_xp)
+
+            # Linha de horas por semana
+            df_line = df.copy()
+            df_line['log_date'] = pd.to_datetime(df_line['log_date'])
+            df_line['week'] = df_line['log_date'].dt.isocalendar().week.astype(int)
+            weekly_hours = df_line.groupby('week')['hours'].sum().reset_index()
+            fig = styled_line(weekly_hours, 'week', 'hours', "Evolução semanal de horas")
+            fig.update_layout(height=250)
+            st.plotly_chart(fig, use_container_width=True)
+
+            # Heatmap
+            hm = styled_heatmap(df_line)
+            if hm:
+                hm.update_layout(height=230)
+                st.plotly_chart(hm, use_container_width=True)
+
+            # Top matérias
+            st.subheader("🏆 Ranking de matérias")
+            subj_rank = df.groupby('subject').agg(
+                horas=('hours', 'sum'),
+                sessoes=('hours', 'count'),
+                xp=('xp_earned', 'sum')
+            ).sort_values('horas', ascending=False).reset_index()
+            subj_rank.columns = ['Matéria', 'Horas', 'Sessões', 'XP']
+            st.dataframe(subj_rank, use_container_width=True, hide_index=True)
         else:
-            st.info("Nenhum registro ainda. Comece registrando seus estudos!")
-    
+            st.info("Nenhum registro no período selecionado.")
+
+    # ======================== METAS ========================
+    elif selected == "🎯 Metas":
+        st.markdown("# 🎯 Metas de Estudo")
+        st.markdown("Defina metas semanais e mensais por matéria para acompanhar seu progresso.")
+
+        subjects_df = get_subjects()
+        goals_df = get_goals()
+
+        with st.form("add_goal_form"):
+            st.subheader("Nova meta")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                goal_subject = st.selectbox("Matéria", subjects_df['name'].tolist())
+            with col2:
+                goal_weekly = st.number_input("Horas/semana", min_value=0.0, max_value=40.0, step=0.5, value=2.0)
+            with col3:
+                goal_monthly = st.number_input("Horas/mês", min_value=0.0, max_value=200.0, step=1.0, value=8.0)
+            if st.form_submit_button("💾 Salvar meta", type="primary"):
+                save_goal(goal_subject, goal_weekly, goal_monthly)
+                st.success(f"Meta salva para {goal_subject}!")
+                st.rerun()
+
+        if not goals_df.empty:
+            st.markdown("---")
+            st.subheader("Progresso das metas")
+            today = date.today()
+            week_start = today - timedelta(days=today.weekday())
+            month_start = today.replace(day=1)
+            df_week_logs = get_study_logs(week_start, today)
+            df_month_logs = get_study_logs(month_start, today)
+
+            for _, row in goals_df.iterrows():
+                subj = row['subject']
+                wh = float(row['weekly_hours'])
+                mh = float(row['monthly_hours'])
+
+                actual_w = df_week_logs[df_week_logs['subject'] == subj]['hours'].sum() if not df_week_logs.empty else 0
+                actual_m = df_month_logs[df_month_logs['subject'] == subj]['hours'].sum() if not df_month_logs.empty else 0
+
+                prog_w = min(actual_w / wh, 1.0) if wh > 0 else 0
+                prog_m = min(actual_m / mh, 1.0) if mh > 0 else 0
+
+                st.markdown(f"""
+                <div class="med-card">
+                    <div style="font-weight:600; color:{COLORS['primary']}; margin-bottom:8px;">{subj}</div>
+                    <div style="font-size:0.85rem; color:{COLORS['text_mid']};">Semana: {actual_w:.1f}h / {wh}h</div>
+                """, unsafe_allow_html=True)
+                st.progress(prog_w, text=f"Semana: {prog_w*100:.0f}%")
+                st.markdown(f'<div style="font-size:0.85rem; color:{COLORS["text_mid"]};">Mês: {actual_m:.1f}h / {mh}h</div>', unsafe_allow_html=True)
+                st.progress(prog_m, text=f"Mês: {prog_m*100:.0f}%")
+                st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.info("Nenhuma meta definida ainda.")
+
+    # ======================== NOTAS RÁPIDAS ========================
+    elif selected == "📌 Notas Rápidas":
+        st.markdown("# 📌 Notas Rápidas")
+        st.markdown("Anote dúvidas, insights ou pontos importantes durante o estudo.")
+
+        subjects_df = get_subjects()
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            note_content = st.text_area("Nota", placeholder="Escreva aqui sua anotação, dúvida ou insight...", height=120)
+        with col2:
+            note_subject = st.selectbox("Matéria", ["Geral"] + subjects_df['name'].tolist())
+            note_type = st.selectbox("Tipo", ["💡 Insight", "❓ Dúvida", "📋 Resumo", "⚠️ Revisar", "✅ Revisado"])
+
+        if st.button("📌 Salvar nota", type="primary"):
+            if note_content.strip():
+                add_quick_note(note_subject, note_content, note_type)
+                st.success("Nota salva!")
+                st.rerun()
+            else:
+                st.warning("Digite algum conteúdo para a nota.")
+
+        st.markdown("---")
+        notes_df = get_quick_notes()
+        if not notes_df.empty:
+            filter_subj = st.selectbox("Filtrar por matéria", ["Todas"] + notes_df['subject'].unique().tolist())
+            filter_type = st.selectbox("Filtrar por tipo", ["Todos"] + notes_df['note_type'].unique().tolist())
+            filtered = notes_df.copy()
+            if filter_subj != "Todas":
+                filtered = filtered[filtered['subject'] == filter_subj]
+            if filter_type != "Todos":
+                filtered = filtered[filtered['note_type'] == filter_type]
+
+            for _, note in filtered.iterrows():
+                col_n, col_del = st.columns([10, 1])
+                with col_n:
+                    st.markdown(f"""
+                    <div class="med-card" style="padding:14px 18px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:4px;">
+                            <span style="font-weight:600; color:{COLORS['primary']};">{note['subject']}</span>
+                            <span style="font-size:0.78rem; color:{COLORS['text_mid']};">{note['created_at'][:16]}</span>
+                        </div>
+                        <span style="font-size:0.8rem; color:{COLORS['text_mid']};">{note['note_type']}</span>
+                        <div style="margin-top:6px; color:{COLORS['text_dark']};">{note['content']}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                with col_del:
+                    if st.button("🗑️", key=f"del_note_{note['id']}"):
+                        delete_quick_note(note['id'])
+                        st.rerun()
+        else:
+            st.info("Nenhuma nota registrada ainda.")
+
+    # ======================== ASSUNTOS ========================
     elif selected == "⚙️ Assuntos":
-        st.header("Gerenciar Assuntos")
+        st.markdown("# ⚙️ Gerenciar Assuntos")
         subjects_df = get_subjects()
         st.dataframe(subjects_df, use_container_width=True, hide_index=True)
         with st.form("add_subject_form"):
-            nome = st.text_input("Nome da matéria")
-            cor = st.color_picker("Cor (opcional)", "#3b82f6")
-            submitted = st.form_submit_button("Adicionar")
+            st.subheader("Adicionar nova matéria")
+            col1, col2 = st.columns(2)
+            with col1:
+                nome = st.text_input("Nome da matéria")
+            with col2:
+                cor = st.color_picker("Cor", COLORS['primary'])
+            submitted = st.form_submit_button("➕ Adicionar", type="primary")
             if submitted and nome:
                 add_subject(nome, cor)
                 st.success(f"'{nome}' adicionado!")
